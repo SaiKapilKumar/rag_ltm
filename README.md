@@ -303,7 +303,7 @@ classDiagram
         +tags: ["process", "deployment"]
     }
     
-    Memory ||--|| MemoryType
+    Memory --> MemoryType : uses
     Memory <|-- EpisodicMemory
     Memory <|-- SemanticMemory
     Memory <|-- ProceduralMemory
