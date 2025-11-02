@@ -1,0 +1,27 @@
+retrieval:
+  vector_db_type: faiss
+  embedding_model: all-MiniLM-L6-v2
+  chunk_size: 500
+  chunk_overlap: 50
+  top_k: 5
+  similarity_threshold: 0.7
+
+generation:
+  llm_provider: azure_openai
+  model: gpt-4.1
+  temperature: 0.7
+  max_tokens: 2048
+
+memory:
+  storage_backend: sqlite
+  db_path: ../data/memory/ltm.db
+  decay_enabled: true
+  decay_rate: 0.01
+  consolidation_interval: 86400
+  importance_threshold: 0.3
+  max_memories: 10000
+
+pipeline:
+  enable_memory: true
+  memory_retrieval_k: 3
+  document_retrieval_k: 5
