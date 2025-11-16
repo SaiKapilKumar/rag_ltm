@@ -53,7 +53,10 @@ async def startup():
     # Add memory
     db_path = Path(__file__).parent.parent.parent / "data" / "memory" / "ltm.db"
     memory_store = MemoryStore(str(db_path))
-    embedder = EmbeddingManager(model_name=config.embedding_model)
+    embedder = EmbeddingManager(
+        model_name=config.embedding_model,
+        provider=config.embedding_provider
+    )
     ltm = LongTermMemory(memory_store, embedder)
     
     # Create memory-enhanced pipeline

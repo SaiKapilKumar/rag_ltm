@@ -17,7 +17,7 @@ class PipelineFactory:
         # Create embedding manager
         embedder = EmbeddingManager(
             model_name=config.embedding_model,
-            provider="sentence-transformers"
+            provider=config.embedding_provider
         )
         
         # Create vector store

@@ -6,7 +6,7 @@ from openai import AzureOpenAI
 class EmbeddingManager:
     """Manages embedding generation for documents and queries"""
     
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2", provider: str = "sentence-transformers"):
+    def __init__(self, model_name: str = "text-embedding-ada-002", provider: str = "azure_openai"):
         self.provider = provider
         self.model_name = model_name
         

@@ -1,6 +1,7 @@
 retrieval:
   vector_db_type: faiss
-  embedding_model: all-MiniLM-L6-v2
+  embedding_provider: azure_openai
+  embedding_model: text-embedding-ada-002
   chunk_size: 500
   chunk_overlap: 50
   top_k: 5

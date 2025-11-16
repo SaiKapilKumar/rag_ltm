@@ -8,7 +8,8 @@ class PipelineConfig:
     
     # Retrieval
     vector_db_type: str = "faiss"
-    embedding_model: str = "all-MiniLM-L6-v2"
+    embedding_provider: str = "azure_openai"
+    embedding_model: str = "text-embedding-ada-002"
     top_k: int = 5
     similarity_threshold: float = 0.7
     
@@ -50,6 +51,7 @@ class PipelineConfig:
         
         if 'retrieval' in data:
             config.vector_db_type = data['retrieval'].get('vector_db_type', config.vector_db_type)
+            config.embedding_provider = data['retrieval'].get('embedding_provider', config.embedding_provider)
             config.embedding_model = data['retrieval'].get('embedding_model', config.embedding_model)
             config.top_k = data['retrieval'].get('top_k', config.top_k)
             config.similarity_threshold = data['retrieval'].get('similarity_threshold', config.similarity_threshold)

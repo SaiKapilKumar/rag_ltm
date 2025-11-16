@@ -16,7 +16,7 @@ graph TB
     
     DocRet --> VectorDB[(🗃️ Vector Store<br/>FAISS/Chroma)]
     MemRet --> MemoryDB[(💾 Memory Store<br/>SQLite)]
-    
+     
     VectorDB --> Context
     MemoryDB --> Context
     
