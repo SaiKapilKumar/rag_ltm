@@ -13,12 +13,16 @@ class LongTermMemory:
         self,
         memory_store: MemoryStore,
         embedding_manager: EmbeddingManager,
-        importance_threshold: float = 0.3
+        importance_threshold: float = 0.3,
+        decay_enabled: bool = True,
+        decay_rate: float = 0.01
     ):
         self.memory_store = memory_store
         self.embedding_manager = embedding_manager
         self.importance_threshold = importance_threshold
         self.importance_calc = ImportanceCalculator()
+        self.decay_enabled = decay_enabled
+        self.decay_rate = decay_rate
     
     def store_memory(
         self,
@@ -68,14 +72,38 @@ class LongTermMemory:
         query: str,
         k: int = 5,
         memory_type: Optional[MemoryType] = None,
-        min_strength: float = 0.1
+        min_strength: float = 0.1,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None
     ) -> List[Memory]:
-        """Retrieve relevant memories for a query"""
-        # Get all memories matching filters
-        all_memories = self.memory_store.get_all_memories(
-            memory_type=memory_type,
-            min_strength=min_strength
-        )
+        """Retrieve relevant memories for a query
+        
+        Args:
+            query: Query text to search for
+            k: Number of memories to retrieve
+            memory_type: Filter by memory type
+            min_strength: Minimum strength threshold
+            session_id: Filter by specific session
+            user_id: Filter by specific user
+        """
+        # Get memories based on filtering criteria
+        if session_id:
+            all_memories = self.memory_store.get_memories_by_session(
+                session_id,
+                memory_type=memory_type,
+                min_strength=min_strength
+            )
+        elif user_id:
+            all_memories = self.memory_store.get_memories_by_user(
+                user_id,
+                memory_type=memory_type,
+                min_strength=min_strength
+            )
+        else:
+            all_memories = self.memory_store.get_all_memories(
+                memory_type=memory_type,
+                min_strength=min_strength
+            )
         
         if not all_memories:
             return []
@@ -93,9 +121,14 @@ class LongTermMemory:
         similarities.sort(key=lambda x: x[1], reverse=True)
         top_memories = [mem for mem, _ in similarities[:k]]
         
-        # Update access for retrieved memories
+        # Apply decay and update access for retrieved memories (batch update)
+        updates = []
         for memory in top_memories:
-            self.memory_store.update_memory_access(memory.memory_id)
+            new_strength = self.calculate_decay(memory)
+            updates.append((memory.memory_id, new_strength))
+        
+        if updates:
+            self.memory_store.batch_update_memory_access(updates)
         
         return top_memories
     
@@ -105,6 +138,70 @@ class LongTermMemory:
         v1 = np.array(vec1)
         v2 = np.array(vec2)
         return float(np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2)))
+    
+    def calculate_decay(self, memory: Memory) -> float:
+        """Calculate new strength after time-based decay
+        
+        Args:
+            memory: Memory object to calculate decay for
+            
+        Returns:
+            New strength value after decay (clamped to 0.1-1.0)
+        """
+        if not self.decay_enabled:
+            return memory.strength
+        
+        # Calculate time elapsed since last access
+        time_delta = datetime.now() - memory.last_accessed
+        days_elapsed = time_delta.total_seconds() / 86400  # Convert to days
+        
+        if days_elapsed <= 0:
+            return memory.strength
+        
+        # Importance acts as a protection factor (0-1)
+        # High importance memories decay slower
+        importance_protection = memory.importance * 0.5
+        
+        # Calculate decay amount
+        decay_amount = self.decay_rate * days_elapsed * (1 - importance_protection)
+        
+        # Apply decay
+        new_strength = memory.strength - decay_amount
+        
+        # Clamp between 0.1 (minimum threshold) and 1.0 (maximum)
+        return max(0.1, min(1.0, new_strength))
+    
+    def apply_decay_to_all_memories(self) -> Dict:
+        """Apply decay to all memories in the store
+        
+        Useful for batch consolidation or maintenance tasks.
+        
+        Returns:
+            Statistics about the decay operation
+        """
+        all_memories = self.memory_store.get_all_memories()
+        
+        updated_count = 0
+        weakened_count = 0
+        
+        for memory in all_memories:
+            old_strength = memory.strength
+            new_strength = self.calculate_decay(memory)
+            
+            if new_strength != old_strength:
+                self.memory_store.update_memory_strength(memory.memory_id, new_strength)
+                updated_count += 1
+                
+                if new_strength < 0.3:
+                    weakened_count += 1
+        
+        return {
+            "total_memories": len(all_memories),
+            "updated_count": updated_count,
+            "weakened_count": weakened_count,
+            "decay_enabled": self.decay_enabled,
+            "decay_rate": self.decay_rate
+        }
     
     def get_memory_stats(self) -> Dict:
         """Get statistics about stored memories"""

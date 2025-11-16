@@ -6,6 +6,7 @@ from src.retrieval.chroma_store import ChromaVectorStore
 from src.retrieval.retriever import DocumentRetriever
 from src.retrieval.chunking import TextChunker
 from src.generation.llm_manager import LLMManager
+from pathlib import Path
 
 class PipelineFactory:
     """Factory for creating RAG pipelines"""
@@ -22,9 +23,23 @@ class PipelineFactory:
         
         # Create vector store
         if config.vector_db_type == "faiss":
-            vector_store = FAISSVectorStore(dimension=embedder.get_dimension())
+            persist_dir = str(Path(__file__).parent.parent.parent / "data" / "embeddings" / "faiss")
+            vector_store = FAISSVectorStore(
+                dimension=embedder.get_dimension(),
+                persist_directory=persist_dir
+            )
+            # Try to load existing index
+            persist_path = str(Path(persist_dir) / "faiss_index")
+            loaded = vector_store.load(persist_path)
+            if loaded:
+                print(f"✅ Loaded existing FAISS index with {len(vector_store.documents)} documents")
+            else:
+                print("📝 Starting with empty FAISS index")
         elif config.vector_db_type == "chroma":
-            vector_store = ChromaVectorStore()
+            persist_dir = str(Path(__file__).parent.parent.parent / "data" / "embeddings" / "chroma")
+            vector_store = ChromaVectorStore(persist_directory=persist_dir)
+            stats = vector_store.get_stats()
+            print(f"✅ Loaded Chroma collection with {stats['total_documents']} documents")
         else:
             raise ValueError(f"Unsupported vector_db_type: {config.vector_db_type}")
         

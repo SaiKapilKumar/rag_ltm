@@ -31,3 +31,10 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Images - Track the directory structure and existing images
+# Add your screenshots here: document-upload.png, chat-interface.png, etc.
+# See images/README.md for required screenshots
+!images/
+!images/*.png
+!images/README.md

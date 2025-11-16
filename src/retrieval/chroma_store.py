@@ -1,5 +1,5 @@
 import chromadb
-from typing import List
+from typing import List, Dict
 from .vector_store import VectorStoreBase, Document, SearchResult
 
 class ChromaVectorStore(VectorStoreBase):
@@ -53,3 +53,64 @@ class ChromaVectorStore(VectorStoreBase):
     def load(self, path: str):
         """Load (Chroma auto-loads)"""
         pass
+    
+    def list_documents(self) -> List[Dict]:
+        """List all documents in the store"""
+        try:
+            # Get all documents from collection
+            results = self.collection.get()
+            
+            if not results['ids']:
+                return []
+            
+            unique_docs = {}
+            for i, doc_id in enumerate(results['ids']):
+                metadata = results['metadatas'][i] if results['metadatas'] else {}
+                original_id = metadata.get('original_doc_id', doc_id)
+                
+                if original_id not in unique_docs:
+                    unique_docs[original_id] = {
+                        'doc_id': original_id,
+                        'filename': metadata.get('filename', original_id),
+                        'source': metadata.get('source', 'unknown'),
+                        'file_type': metadata.get('file_type', ''),
+                        'chunk_count': 0
+                    }
+                unique_docs[original_id]['chunk_count'] += 1
+            
+            return list(unique_docs.values())
+        except Exception as e:
+            print(f"Error listing documents: {e}")
+            return []
+    
+    def clear(self):
+        """Clear all documents from the store"""
+        try:
+            # Delete the collection and recreate it
+            self.client.delete_collection(self.collection.name)
+            self.collection = self.client.get_or_create_collection(name=self.collection.name)
+            print("    🗑️ Chroma: Vector store cleared")
+        except Exception as e:
+            print(f"Error clearing store: {e}")
+    
+    def get_stats(self) -> Dict:
+        """Get statistics about the vector store"""
+        try:
+            results = self.collection.get()
+            total_chunks = len(results['ids']) if results['ids'] else 0
+            
+            unique_docs = set()
+            if results['metadatas']:
+                for metadata in results['metadatas']:
+                    original_id = metadata.get('original_doc_id', '')
+                    if original_id:
+                        unique_docs.add(original_id)
+            
+            return {
+                'total_chunks': total_chunks,
+                'total_documents': len(unique_docs),
+                'collection_name': self.collection.name
+            }
+        except Exception as e:
+            print(f"Error getting stats: {e}")
+            return {'total_chunks': 0, 'total_documents': 0, 'collection_name': self.collection.name}

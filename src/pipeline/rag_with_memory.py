@@ -1,9 +1,11 @@
 from typing import List, Optional, Dict
 from dataclasses import dataclass
+from langchain_core.prompts import PromptTemplate
+
 from .rag_pipeline import RAGPipeline, RAGResponse
 from src.memory.long_term_memory import LongTermMemory
 from src.memory.memory_types import MemoryType
-from src.generation.prompts import PromptTemplate
+from src.generation.prompts import RAG_WITH_MEMORY_SYSTEM, RAG_WITH_MEMORY_PROMPT
 import time
 
 @dataclass
@@ -32,6 +34,7 @@ class RAGWithMemory(RAGPipeline):
         self,
         query_text: str,
         session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
         top_k: Optional[int] = None,
         temperature: float = 0.7,
         include_sources: bool = True,
@@ -46,23 +49,34 @@ class RAGWithMemory(RAGPipeline):
         search_results = self.retriever.retrieve(query_text, k=k)
         retrieval_time = time.time() - retrieval_start
         
-        # Retrieve relevant memories
+        # Retrieve relevant memories (filtered by session/user if provided)
         memory_start = time.time()
-        relevant_memories = self.ltm.retrieve_memories(query_text, k=self.memory_k)
+        relevant_memories = self.ltm.retrieve_memories(
+            query_text, 
+            k=self.memory_k,
+            session_id=session_id,
+            user_id=user_id
+        )
         memory_retrieval_time = time.time() - memory_start
         
         # Assemble context
         context_texts = self._assemble_context(search_results)
         memory_texts = [m.content for m in relevant_memories]
         
-        # Generate response with memory
+        # Generate response with memory context
         generation_start = time.time()
-        prompt = PromptTemplate.format_rag_with_memory_prompt(
-            query_text, context_texts, memory_texts
+        # Format memories and context with numbering
+        formatted_memories = "\n".join([f"[M{i}] {mem}" for i, mem in enumerate(memory_texts, 1)]) if memory_texts else "None"
+        formatted_context = "\n".join([f"[C{i}] {ctx}" for i, ctx in enumerate(context_texts, 1)])
+        prompt_template = PromptTemplate.from_template(RAG_WITH_MEMORY_PROMPT)
+        prompt = prompt_template.format(
+            memories=formatted_memories,
+            context=formatted_context,
+            query=query_text
         )
         llm_response = self.llm_manager.generate(
             prompt=prompt,
-            system_message=PromptTemplate.RAG_WITH_MEMORY_SYSTEM,
+            system_message=RAG_WITH_MEMORY_SYSTEM,
             temperature=temperature
         )
         generation_time = time.time() - generation_start
@@ -70,11 +84,17 @@ class RAGWithMemory(RAGPipeline):
         # Store interaction as episodic memory
         if store_interaction:
             interaction_content = f"Q: {query_text}\nA: {llm_response.content}"
+            metadata = {"query": query_text}
+            if session_id:
+                metadata["session_id"] = session_id
+            if user_id:
+                metadata["user_id"] = user_id
+            
             self.ltm.store_memory(
                 content=interaction_content,
                 memory_type=MemoryType.EPISODIC,
                 source=f"conversation_{session_id}" if session_id else "conversation",
-                metadata={"session_id": session_id, "query": query_text}
+                metadata=metadata
             )
         
         # Format sources and memories
@@ -103,7 +123,8 @@ class RAGWithMemory(RAGPipeline):
                 "num_sources": len(search_results),
                 "num_memories": len(relevant_memories),
                 "model": llm_response.model,
-                "session_id": session_id
+                "session_id": session_id,
+                "user_id": user_id
             },
             memories_used=memories_used,
             memory_retrieval_time=memory_retrieval_time

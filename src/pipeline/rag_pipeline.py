@@ -1,10 +1,11 @@
 from typing import List, Optional, Dict
 from dataclasses import dataclass
 import time
+from langchain_core.prompts import PromptTemplate
 
 from src.retrieval.retriever import DocumentRetriever, SearchResult
 from src.generation.llm_manager import LLMManager
-from src.generation.prompts import PromptTemplate
+from src.generation.prompts import RAG_SYSTEM_MESSAGE, RAG_PROMPT
 
 @dataclass
 class RAGResponse:
@@ -54,10 +55,13 @@ class RAGPipeline:
         
         # Generate response
         generation_start = time.time()
-        prompt = PromptTemplate.format_rag_prompt(query_text, context_texts)
+        # Format context with numbering
+        formatted_context = "\n".join([f"[{i}] {ctx}" for i, ctx in enumerate(context_texts, 1)])
+        prompt_template = PromptTemplate.from_template(RAG_PROMPT)
+        prompt = prompt_template.format(context=formatted_context, query=query_text)
         llm_response = self.llm_manager.generate(
             prompt=prompt,
-            system_message=PromptTemplate.RAG_SYSTEM_MESSAGE,
+            system_message=RAG_SYSTEM_MESSAGE,
             temperature=temperature
         )
         generation_time = time.time() - generation_start
